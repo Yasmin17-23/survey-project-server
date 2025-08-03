@@ -57,6 +57,15 @@ async function run() {
       res.send(result)
     })
 
+    //Get all survey data for surveyor from db
+    app.get('/my-surveylists/:email', async (req, res) => {
+      const email = req.params.email;
+      const query = { 'surveyor.email': email };
+      const result = await surveyCollection.find(query).toArray();
+      res.send(result)
+    })
+
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
