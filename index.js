@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const { MongoClient, ServerApiVersion } = require("mongodb");
+const jwt = require('jsonwebtoken')
 require("dotenv").config();
 const app = express();
 const port = process.env.PORT || 8000;
@@ -36,6 +37,52 @@ async function run() {
     //await client.connect();
 
     const surveyCollection = client.db("surveyBangla").collection("surveys");
+    const userCollection = client.db('surveyBangla').collection('users');
+
+    //jwt related api
+    app.post('/jwt', async (req, res) => {
+      const user = req.body;
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
+        expiresIn: '1h'
+      })
+      res.send({ token })
+    })
+
+    //middleware
+    const verifyToken = (req, res, next) => {
+      if(!req.headers.authorization){
+        return res.status(401).send({ message: 'unauthorized access' })
+      }
+      const token = req.headers.authorization.split(' ')[1];
+      jwt.verify = (token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+        if(err) {
+           return res.status(401).send({ message: 'unauthorized access' })
+        }
+        req.decoded = decoded;
+        next()
+      } )
+    }
+
+    //get all user from db
+    app.get('/users', async (req, res) => {
+      const result = await userCollection.find().toArray();
+      res.send(result);
+    })
+
+    //Save a user in db
+    app.put('/user', async(req, res) => {
+      const user = req.body;
+      const query = { email: user?.email };
+      const options = { upsert: true };
+      const updateDoc = {
+        $set: {
+          ...user,
+          timestamp: Date.now(),
+        }
+      }
+      const result = await userCollection.updateOne(query, updateDoc, options);
+      res.send(result)
+    })
 
     //Save a survey data in db
     app.post("/survey", async (req, res) => {
