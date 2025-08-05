@@ -48,7 +48,7 @@ async function run() {
       res.send({ token })
     })
 
-    //middleware
+    //middleware for token verify
     const verifyToken = (req, res, next) => {
       if(!req.headers.authorization){
         return res.status(401).send({ message: 'unauthorized access' })
@@ -58,14 +58,47 @@ async function run() {
         if(err) {
            return res.status(401).send({ message: 'unauthorized access' })
         }
-        req.decoded = decoded;
+        req.user = decoded;
         next()
       } )
     }
 
+    //middleware for admin verify
+    const verifyAdmin = async (req, res, next) => {
+      const user = req.user;
+      const query = { email: user?.email };
+      const result = await userCollection.findOne(query);
+      if(!result || result?.role !== 'admin'){
+        return res.status(403).send({ message: 'forbidden access' });
+      }
+
+      next()
+    }
+
+     //middleware for surveyor verify
+    const verifySurveyor = async (req, res, next) => {
+      const user = req.user;
+      const query = { email: user?.email };
+      const result = await userCollection.findOne(query);
+      if(!result || result?.role !== 'surveyor'){
+        return res.status(403).send({ message: 'forbidden access' });
+      }
+      
+      next()
+    }
+
+
     //get all user from db
-    app.get('/users', async (req, res) => {
+    app.get('/users', verifyToken, verifyAdmin, async (req, res) => {
       const result = await userCollection.find().toArray();
+      res.send(result);
+    })
+
+    //get a user info using email from db
+    app.get('/user/:email', async (req, res) => {
+      const email = req.params.email;
+      const query = { email }
+      const result = await userCollection.findOne(query);
       res.send(result);
     })
 
@@ -91,8 +124,23 @@ async function run() {
       res.send(result)
     })
 
+    //update user role
+    app.patch('/users/updaterole/:email', async (req, res) => {
+      const email = req.params.email;
+      const user = req.body;
+      const query = { email };
+      const updatedDoc = {
+         $set: {
+            ...user, 
+            timestamp: Date.now(),
+         }
+      }
+      const result = await userCollection.updateOne(query, updatedDoc);
+      res.send(result);
+    })
+
     //Save a survey data in db
-    app.post("/survey", async (req, res) => {
+    app.post("/survey", verifyToken, verifySurveyor, async (req, res) => {
       const surveyData = req.body;
       surveyData.timestamp = new Date();
       const newSurveyData = {
@@ -112,7 +160,7 @@ async function run() {
     })
 
     //Get all survey data for surveyor from db
-    app.get('/my-surveylists/:email', async (req, res) => {
+    app.get('/my-surveylists/:email', verifyToken, verifySurveyor, async (req, res) => {
       const email = req.params.email;
       const query = { 'surveyor.email': email };
       const result = await surveyCollection.find(query).toArray();
