@@ -1,6 +1,6 @@
 const express = require("express");
 const cors = require("cors");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const jwt = require('jsonwebtoken')
 require("dotenv").config();
 const app = express();
@@ -48,19 +48,22 @@ async function run() {
       res.send({ token })
     })
 
+
     //middleware for token verify
-    const verifyToken = (req, res, next) => {
-      if(!req.headers.authorization){
-        return res.status(401).send({ message: 'unauthorized access' })
-      }
-      const token = req.headers.authorization.split(' ')[1];
-      jwt.verify = (token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
-        if(err) {
-           return res.status(401).send({ message: 'unauthorized access' })
-        }
-        req.user = decoded;
-        next()
-      } )
+    const verifyToken = async (req, res, next) => {
+       console.log('inside verify token', req.headers.authorization)
+       if(!req.headers.authorization){
+         return res.status(401).send({ message: 'unauthorized access' })
+       }
+
+       const token = req.headers.authorization.split(' ')[1];
+       jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+          if(err){
+              return res.status(401).send({ message: 'unauthorized access' })
+          }
+          req.user = decoded;
+          next()
+       })
     }
 
     //middleware for admin verify
@@ -86,7 +89,6 @@ async function run() {
       
       next()
     }
-
 
     //get all user from db
     app.get('/users', verifyToken, verifyAdmin, async (req, res) => {
@@ -153,19 +155,50 @@ async function run() {
       res.send(result);
     });
 
+     //Get all survey data for surveyor from db
+    app.get('/my-surveylists/:email', verifyToken, verifySurveyor,  async (req, res) => {
+      const email = req.params.email;
+      let query = { 'surveyor.email': email };
+      const result = await surveyCollection.find(query).toArray();
+      res.send(result)
+    })
+
+    //Get a single survey data using id from db
+    app.get('/survey/:id', async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId (id) };
+      const result = await surveyCollection.findOne(query);
+      res.send(result);
+    })
+
     //Get all survey data from db
     app.get('/surveys', async (req, res) => {
       const result = await surveyCollection.find().toArray();
       res.send(result)
     })
 
-    //Get all survey data for surveyor from db
-    app.get('/my-surveylists/:email', verifyToken, verifySurveyor, async (req, res) => {
-      const email = req.params.email;
-      const query = { 'surveyor.email': email };
-      const result = await surveyCollection.find(query).toArray();
-      res.send(result)
+    //update vote count and and save voter information in db
+    app.put('/vote-count/:id', async (req, res) => {
+      const { vote, name, email } = req.body;
+      const id = req.params.id;
+      const query = { _id: new ObjectId (id) };
+      let updateDoc = {};
+      if(vote === 'yes'){
+        updateDoc = {
+           $set: { yesCount: 1 },
+           $push: { voteRecord: { vote, name, email} },
+        };
+      } else {
+          updateDoc = {
+           $set: { noCount: 1 },
+           $push: { voteRecord: { vote, name, email} },
+        };
+      }
+      const result = await surveyCollection.updateOne(query, updateDoc);
+      res.send(result);
     })
+
+   
 
 
     // Send a ping to confirm a successful connection
