@@ -38,6 +38,7 @@ async function run() {
 
     const surveyCollection = client.db("surveyBangla").collection("surveys");
     const userCollection = client.db('surveyBangla').collection('users');
+    
 
     //jwt related api
     app.post('/jwt', async (req, res) => {
@@ -179,10 +180,15 @@ async function run() {
 
     //update vote count and and save voter information in db
     app.put('/vote-count/:id', async (req, res) => {
-      const { vote, name, email } = req.body;
+      const { vote, comment, name, email } = req.body;
       const id = req.params.id;
       const query = { _id: new ObjectId (id) };
       let updateDoc = {};
+      if(comment){
+        await surveyCollection.updateOne(query, 
+          { $push: { commentRecord: { comment, email } }}
+        )
+      }
       if(vote === 'yes'){
         updateDoc = {
            $set: { yesCount: 1 },
@@ -195,11 +201,21 @@ async function run() {
         };
       }
       const result = await surveyCollection.updateOne(query, updateDoc);
+      res.send(result)
+    })
+
+    //report survey using survey id in db
+    app.put('/survey-reports/:id', async (req, res) => {
+      const reportInfo = req.body;
+      const id = req.params.id;
+      const query = { _id: new ObjectId (id) };
+      const result = await surveyCollection.updateOne(query, {
+        $push : { reportedUser: reportInfo }
+      })
       res.send(result);
     })
 
    
-
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
