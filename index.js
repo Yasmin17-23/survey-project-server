@@ -4,6 +4,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const jwt = require('jsonwebtoken')
 require("dotenv").config();
 const app = express();
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY)
 const port = process.env.PORT || 8000;
 
 //middleware
@@ -38,6 +39,7 @@ async function run() {
 
     const surveyCollection = client.db("surveyBangla").collection("surveys");
     const userCollection = client.db('surveyBangla').collection('users');
+    const paymentCollection = client.db("surveyBangla").collection('payments');
     
 
     //jwt related api
@@ -90,6 +92,22 @@ async function run() {
       
       next()
     }
+
+    ///create payment intent
+    app.post('/create-payment-intent', verifyToken, async (req, res) => {
+       const { price } = req.body;
+       
+       //create a paymentIntent for buy membership 
+      const { client_secret } = await stripe.paymentIntents.create({
+        amount: 5900,
+        currency: "usd",
+        // In the latest version of the API, specifying the `automatic_payment_methods` parameter is optional because Stripe enables its functionality by default.
+        automatic_payment_methods: {
+          enabled: true,
+        },
+       })
+       res.send({ clientSecret: client_secret });
+    })
 
     //get all user from db
     app.get('/users', verifyToken, verifyAdmin, async (req, res) => {
@@ -213,6 +231,21 @@ async function run() {
         $push : { reportedUser: reportInfo }
       })
       res.send(result);
+    })
+
+    //Get participated survey user vote  using email from db
+    app.get('/surveys/participated/:email', async (req, res) => {
+      const email = req.params.email;
+      const query = { 'voteRecord.email': email };
+      const result = await surveyCollection.find(query).toArray();
+      res.send(result);
+    })
+    
+    //Save a payment data in db
+    app.post('/payment', async (req, res) => {
+       const paymentData = req.body;
+       const result = await paymentCollection.insertOne(paymentData);
+       res.send(result);
     })
 
    
