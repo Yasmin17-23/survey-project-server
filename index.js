@@ -169,13 +169,15 @@ async function run() {
         status: "publish",
         yesCount: 0,
         noCount: 0,
+        voteCount : 0,
       };
       const result = await surveyCollection.insertOne(newSurveyData);
       res.send(result);
     });
 
-     //Get all survey data for surveyor from db
-    app.get('/my-surveylists/:email', verifyToken, verifySurveyor,  async (req, res) => {
+     
+    //Get all survey data for  surveyor from db
+    app.get('/responses-surveylist/:email', verifyToken, verifySurveyor,  async (req, res) => {
       const email = req.params.email;
       let query = { 'surveyor.email': email };
       const result = await surveyCollection.find(query).toArray();
@@ -211,11 +213,13 @@ async function run() {
         updateDoc = {
            $set: { yesCount: 1 },
            $push: { voteRecord: { vote, name, email} },
+           $inc: { voteCount: 1 },
         };
       } else {
           updateDoc = {
            $set: { noCount: 1 },
            $push: { voteRecord: { vote, name, email} },
+           $inc: { voteCount: 1 },
         };
       }
       const result = await surveyCollection.updateOne(query, updateDoc);
@@ -248,6 +252,26 @@ async function run() {
        res.send(result);
     })
 
+    //Get all payments from db
+    app.get('/payments', verifyToken, verifyAdmin, async (req, res) => {
+      const result = await paymentCollection.find().toArray();
+      res.send(result)
+    })
+   
+    //update survey status 
+    app.patch('/survey/updateStatus/:id', async (req, res) => {
+      const id = req.params.id;
+      const status = req.body;
+      const query = { _id: new ObjectId (id) };
+      const updatedDoc = {
+         $set: {
+            ...status, 
+            timestamp: Date.now(),
+         }
+      }
+      const result = await surveyCollection.updateOne(query, updatedDoc);
+      res.send(result);
+    })
    
 
     // Send a ping to confirm a successful connection
